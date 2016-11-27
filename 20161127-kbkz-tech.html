@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+
+  <head>
+    <meta charset="utf-8">
+
+    <title>ScalaPB + gRPC</title>
+
+    <meta name="description" content="A framework for easily creating beautiful presentations using HTML">
+    <meta name="author" content="Hakim El Hattab">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui">
+
+    <link rel="stylesheet" href="css/reveal.css">
+    <link rel="stylesheet" href="css/theme/black.css" id="theme">
+
+    <!-- Code syntax highlighting -->
+    <link rel="stylesheet" href="lib/css/zenburn.css">
+
+    <!-- Printing and PDF exports -->
+    <script>
+      var link = document.createElement( 'link' );
+      link.rel = 'stylesheet';
+      link.type = 'text/css';
+      link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+      document.getElementsByTagName( 'head' )[0].appendChild( link );
+    </script>
+
+    <!-- No capitalize on headers -->
+    <style type="text/css">
+      .reveal h1,
+      .reveal h2,
+      .reveal h3,
+      .reveal h4,
+      .reveal h5,
+      .reveal h6 {
+        text-transform: none;
+      }
+    </style>
+
+    <!--[if lt IE 9]>
+	<script src="lib/js/html5shiv.js"></script>
+	<![endif]-->
+  </head>
+
+  <body>
+
+    <div class="reveal">
+
+      <!-- Any section element inside of this container is displayed as a slide -->
+      <div class="slides">
+        <section data-markdown data-separator="^\n====$" data-separator-vertical="^\n----$" data-separator-notes="^Note:">
+          <script type="text/template">
+            # Protocol Buffers
+
+            ====
+            
+            # Who am I
+            * Takashi Tayama (@tayama0324)
+                * 株式会社ドワンゴ RPCチーム
+                    * gRPC, Protocol Buffers の布教活動
+                    * gRPC の Scala サポート (ScalaPB)
+                    * 最近活動してない（）
+            * Qiita の記事が継続的にストックされるのでびびっている
+                * Protocol Buffers は遅いのか
+                * http://qiita.com/tayama0324/items/499a5fed2a1c8479a5cf
+            
+            ====
+
+            # Protocol Buffers
+
+            ----
+
+            # Protocol Buffers is 何
+
+            * Google 謹製のメッセージフォーマット
+            * gRPC のデフォルトメッセージフォーマットとして採用
+            * 2008年にOSS化
+
+            ----
+
+            ## 典型的な利用フロー
+
+            1. IDL (データ構造記述言語) でデータ構造を記述する
+            2. 記述した .proto ファイルをコンパイルし、好きな言語でシリアライザをコード生成する
+            3. 生成されたコードを利用する
+
+            ----
+
+            ## Protobuf IDL
+            
+            ```
+            message Point2D {
+              // (型名) (フィールド名) = (タグ名);
+              int32 x = 1;
+              int32 y = 2;
+            }
+            ```
+
+            ----
+
+            ## Protobuf IDL
+
+            ```
+            message Example {
+              bool boolean_value = 1;
+              string string_value = 2;
+              bytes byte_array = 3;
+
+              repeated int32 int_array = 4;
+
+              message SubMessage {
+                double double_value = 1;
+              }
+              SubMessage nested_message = 5;
+            }
+            ```
+            
+            ----
+
+            ## 生成コード例 (Java)
+
+            ```
+            public  static final class Point2D extends
+              com.google.protobuf.GeneratedMessage implements
+              // @@protoc_insertion_point(message_implements:Point2D)
+              Point2DOrBuilder {
+              // Use Point2D.newBuilder() to construct.
+
+              private Point2D() {
+                x_ = 0;
+                y_ = 0;
+              }
+
+              private int x_;
+              public int getX() {
+                return x_;
+              }
+
+              private int y_;
+                return y_;
+              }
+            }
+            ```
+
+            ----
+                  
+            ## 生成コード利用例
+
+            ```
+            Point2D point = Point2D.newBuilder()
+              .setX(2)
+              .setY(5)
+              .build();
+
+            // シリアライズ
+            ByteBuffer bb = ByteBuffer.allocate(point.getSerializedSize());
+            CodedOutputStream cos = CodedOutputStream.newInstance(bb);
+            point.writeTo(cos);
+            ```
+            
+            ====
+
+            # JSON と JSON Schema でよくね？
+
+            そんなことはない
+
+            gRPC のおかげで注目を集めている感もあるが、 protobuf 単体で使っても超便利
+            
+            ----
+
+            ## コード生成
+
+            * (特に静的型言語では) JSON シリアライザを実装するのは苦痛
+            
+            ```
+            // 例: Scala play-json
+            case class Point2D(x: Int, y: Int)
+            object Point2D {
+              implicit val format = (
+                (__ \ "x").format[Int] and
+                (__ \ "y").format[Int]
+              )(Point2D.apply, unlift(Point2D.unapply))
+            }
+            ```
+
+            * Protobuf ならコード生成器におまかせ
+            * 複数の言語間でデータを安全に共有できる
+
+            ----
+
+            ## 表現力
+
+            * Protobuf IDL と JSON Schema は思想レベルで別物
+                * Protobuf IDL はデータ構造を定義する
+                * JSON Schema は JSON データの値域を記述する
+
+            * たとえば再帰的なデータ構造は JSON Schema では表現できない
+
+            ```
+            message Node {
+              string name = 1;
+              repeated string attributes = 2;
+              repeated Node children = 3;
+            }
+            ```
+
+            ----
+
+            ## 効率
+
+            * Protobuf のほうがシリアライズ後のサイズが小さい
+                * バイナリフォーマットなので当然
+
+            ----
+
+            # デメリット
+
+            * 人間が直接読み書きするには向かない
+                * デシリアライズには同じ IDL ファイル（から生成されたコード）が必要
+                * シリアライズしたメッセージには最小限のスキーマ情報しか乗らない（後述）
+                * JSON との相互変換である程度カバーできる
+
+            ----
+            
+            ## JSON との相互変換
+
+            * message を JSON に変換するときのルールは厳密に定められている
+                * フィールド名は lowerCamel にするんやで、とか
+
+            ```
+            message Example {
+              string string_value = 1;
+              int32 int_value = 2;
+            }
+            ```
+
+            ```
+            {
+              "stringValue": "mofumofu",
+              "intValue": 2525
+            }
+            ```
+
+            ====
+            
+            # メッセージフォーマット
+
+            * 概略のみ説明します
+                * 正式な仕様はこちら
+                * https://developers.google.com/protocol-buffers/docs/encoding
+            
+            ----
+
+            ## 基本的な方針
+
+            * 各フィールドについて、タグとワイヤータイプとフィールド値をエンコードしたものを並べる
+
+            ```
+            message Point2D {
+              // (型名) (フィールド名) = (タグ名);
+              int32 x = 1;
+              int32 y = 2;
+            }
+            ```
+            
+            ----
+            
+            ## フィールドタイプとワイヤータイプ
+
+            * IDL 上のフィールド型とメッセージフォーマット上の型が 1:1 対応しているわけではない
+            * ワイヤータイプは以下の4種類
+                * varint (可変長整数)
+                * 32-bit fixed
+                * 64-bit fixed
+                * byte array
+
+            ----
+
+            ## （一例）
+
+            ||Field Type|Wire Type|
+            |:----|:----|:----|
+            |整数|int32, int64|varint|
+            |固定長整数|fixed64|fixed 64-bit|
+            |真理値|bool|varint|
+            |実数|double|fixed 64-bit|
+            |バイト列|bytes|byte array|
+            |文字列|string|byte array|
+            |ネストしたメッセージ|(任意)|byte array|
+            
+            ----
+            
+            ### varint のエンコーディング
+
+            * 小さい数ほど少ないビット数で表すような可変長エンコーディング
+            * 7ビットごとに区切ってリトルエンディアンで並べる
+               * 最上位グループには `0` を、それ以外には `1` を補う
+
+            ```
+            (ex. 300 を varint にエンコードする)
+               300 (10進)
+            =  0000010 0101100 (2進)
+
+               0101100 + 1 + 0000010 + 0
+            ```
+
+            ----
+        
+            ### 32-bit fixed, 64-bit fixed
+
+            そのまま
+
+            ### byte array
+
+            バイト長 (varint) につづいて実際のデータ
+
+            ----
+
+            ワイヤーフォーマットの理解は必須ではないが、以下のことが直感的にわかるようになるので知っておくと便利
+
+            * なぜバイナリ単体からデシリアライズできないか
+            * 整数型 int32, sint32, fixed32 をどう使い分けたらいいか
+            * タグ番号15以下のフィールドはちょっと効率よくエンコードできること
+            * int32 フィールドを int64 に変更することは安全にできること
+            * int32 フィールドを fixed32 に変更することはできないこと
+            
+            ====
+
+            # Protobuf を楽しく使うために
+            
+            ====
+
+            # Robustness Principle
+
+            ----
+
+            * 最新の IDL 文法は version 3
+            * Version 2 までは `required/optional/repeated` 修飾子が必須だった
+
+            ```
+            message Example {
+              // デシリアライズ時に存在しない場合エラー
+              required string required_value = 1;
+              // 存在しなくてもよい
+              optional int32 optional_value = 2;
+            }
+            ```
+
+            ----
+            
+            ## required は good parts か？
+
+            * 便利そうに見えるが実は罠
+            * required フィールドは不要になっても削除することができない
+                * RPC で使う場合、全てのサーバーとクライアントが同時に required フィールドを撤廃する必要がある
+                * 現実的に不可能
+
+            ----
+
+            ## Protobuf に限った話ではない
+
+            * JSON でもなんでも同じことが言える
+            * 実際に遭遇した事例
+                1. データを JSON にして Redis に一次保存するコードを書く
+                2. 仕様変更が起こり、データ構造から必須パラメータを一つ取り除く
+                3. 新しいバージョンのコードをデプロイする
+                4. 関係ない箇所でバグが発覚し、切り戻す
+                5. 古いバージョンのコードが Redis を読みに行き、新しいバージョンのコードが残した JSON をデシリアライズする
+                6. 突然の死
+
+            ----
+            
+            ## Protobuf の流儀
+
+            * IDL Version 3 から required/optional は撤廃
+            * 代わりにデフォルト値が導入された
+
+            |型|デフォルト値|
+            |:----|:----|
+            |整数 (int32, sint32, fix32, etc)|0|
+            |bool|false|
+            |string|""|
+            |bytes|[]|
+            |ネストしたメッセージ|null|
+
+            ----
+            
+            ## Protobuf の流儀
+
+            * デシリアライズする時に
+                * フィールドがバイナリ中にないときはデフォルト値で埋められる
+                * バイナリ中に未知のフィールドがあるときは単に無視する
+            * フィールドの追加と削除は互換性を壊さない
+
+            ----
+
+            # Robustness Principle
+
+            送信するものに関しては厳密に
+
+            受け取るものに関しては寛容に
+
+            Postel's Law
+
+            ====
+        
+            ## Documentations
+
+            * Language Guide
+                * https://developers.google.com/protocol-buffers/docs/proto3
+                * 今日の話はだいたいこれの受け売り
+
+            ----
+
+            ## おわりに
+            
+            * メッセージフォーマットは実装的には簡単
+                * しかし運用性を考えると無数の罠がある
+                * Protobuf では公式のガイドラインに従うだけで自然と罠を回避できる
+            * Protobuf を採用するつもりがなくても、Language Guide を読んで思想だけ盗んでおくと幸せになれる
+          </script>
+        </section>
+      </div>
+
+    </div>
+
+    <script src="lib/js/head.min.js"></script>
+    <script src="js/reveal.js"></script>
+
+    <script>
+
+      // Full list of configuration options available at:
+      // https://github.com/hakimel/reveal.js#configuration
+      Reveal.initialize({
+      controls: true,
+      progress: true,
+      history: true,
+      center: true,
+
+      transition: 'slide', // none/fade/slide/convex/concave/zoom
+
+      // Optional reveal.js plugins
+      dependencies: [
+      { src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+      { src: 'plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+      { src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+      { src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+      { src: 'plugin/zoom-js/zoom.js', async: true },
+      { src: 'plugin/notes/notes.js', async: true }
+      ]
+      });
+
+    </script>
+
+  </body>
+</html>
